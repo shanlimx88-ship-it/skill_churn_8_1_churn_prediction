@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流失预警模型 | Skill 8.1</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;padding:40px 20px}
+        .container{max-width:1400px;margin:0 auto}
+
+        .header{background:white;border-radius:20px;padding:30px;margin-bottom:30px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.08)}
+        .header h1{color:#1a1a2e;font-size:2rem}
+        .header .subtitle{color:#666;margin-top:8px}
+
+        .section{background:white;border-radius:20px;padding:25px;margin-bottom:30px;box-shadow:0 2px 10px rgba(0,0,0,0.08)}
+        .section h2{color:#1a1a2e;font-size:1.2rem;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid #667eea}
+
+        .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px}
+        .stat-card{background:#f8f9fa;padding:20px;border-radius:16px;text-align:center;border-top:4px solid #667eea}
+        .stat-card .label{font-size:0.8rem;color:#888}
+        .stat-card .value{font-size:1.3rem;font-weight:bold;color:#1a1a2e}
+
+        .table-wrapper{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:0.9rem}
+        th,td{padding:10px 14px;text-align:center;border-bottom:1px solid #eee}
+        th{background:#f8f9fa;font-weight:600;color:#667eea}
+        tr:hover td{background:#fafafa}
+
+        .metrics-definition{
+            display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:10px;
+        }
+        .def-item{
+            background:#f8f9fa;padding:12px 16px;border-radius:10px;border-left:3px solid #667eea;
+        }
+        .def-item .def-name{font-weight:600;color:#1a1a2e;display:block;margin-bottom:4px}
+        .def-item .def-desc{font-size:0.85rem;color:#555;line-height:1.5}
+
+        .insight-box{
+            background:#f0f4ff;padding:16px 20px;border-radius:12px;border-left:4px solid #667eea;margin-top:10px;line-height:2
+        }
+
+        .footer{text-align:center;padding:20px;color:#aaa;font-size:0.8rem}
+
+        @media(max-width:768px){.stat-grid,.metrics-definition{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <h1>⚠️ 流失预警模型</h1>
+        <div class="subtitle">基于18+深入行为特征预测用户流失风险</div>
+    </div>
+
+    <div class="section">
+        <h2>📐 指标说明</h2>
+        <div class="metrics-definition">
+            <div class="def-item">
+                <span class="def-name">📊 特征重要性</span>
+                <span class="def-desc">反映每个行为特征对预测流失的贡献度</span>
+            </div>
+            <div class="def-item">
+                <span class="def-name">📊 AUC</span>
+                <span class="def-desc">模型区分能力，0.7-0.8 良好，>0.8 优秀</span>
+            </div>
+            <div class="def-item">
+                <span class="def-name">📊 风险等级</span>
+                <span class="def-desc">低风险(0-30%) / 中风险(30-60%) / 高风险(60-100%)</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📋 全部特征中英文对照</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>特征名</th><th>中文说明</th><th>English</th></tr></thead>
+                <tbody>
+        <tr>
+            <td><code>active_days_14d</code></td>
+            <td>前14天活跃天数</td>
+            <td>Active days in first 14 days</td>
+        </tr>
+        
+        <tr>
+            <td><code>sessions_14d</code></td>
+            <td>前14天会话总数</td>
+            <td>Total sessions in first 14 days</td>
+        </tr>
+        
+        <tr>
+            <td><code>avg_depth_14d</code></td>
+            <td>平均会话深度（轮次）</td>
+            <td>Average session depth (turns)</td>
+        </tr>
+        
+        <tr>
+            <td><code>has_hva_14d</code></td>
+            <td>是否完成高价值行为</td>
+            <td>Completed High-Value Action</td>
+        </tr>
+        
+        <tr>
+            <td><code>adoption_rate_14d</code></td>
+            <td>采纳率（AI输出直接使用比例）</td>
+            <td>Adoption rate (direct AI output usage)</td>
+        </tr>
+        
+        <tr>
+            <td><code>feature_count_14d</code></td>
+            <td>使用的高级功能数量</td>
+            <td>Number of advanced features used</td>
+        </tr>
+        
+        <tr>
+            <td><code>day1_return</code></td>
+            <td>第2天是否回访</td>
+            <td>Returned on day 2</td>
+        </tr>
+        
+        <tr>
+            <td><code>day7_return</code></td>
+            <td>第7天是否回访</td>
+            <td>Returned on day 7</td>
+        </tr>
+        
+        <tr>
+            <td><code>day14_return</code></td>
+            <td>第14天是否回访</td>
+            <td>Returned on day 14</td>
+        </tr>
+        
+        <tr>
+            <td><code>num_scenarios</code></td>
+            <td>使用场景数量</td>
+            <td>Number of usage scenarios</td>
+        </tr>
+        
+        <tr>
+            <td><code>interval_std</code></td>
+            <td>使用间隔标准差（使用规律性）</td>
+            <td>Standard deviation of usage intervals (regularity)</td>
+        </tr>
+        
+        <tr>
+            <td><code>activity_trend</code></td>
+            <td>活跃度变化趋势（后7天-前7天）</td>
+            <td>Activity trend (day 8-14 minus day 1-7)</td>
+        </tr>
+        
+        <tr>
+            <td><code>first_hva_days</code></td>
+            <td>首次高价值行为出现天数</td>
+            <td>Days to first High-Value Action</td>
+        </tr>
+        
+        <tr>
+            <td><code>scenario_diversity</code></td>
+            <td>场景多样性指数（0-1，越高越多样）</td>
+            <td>Scenario diversity index (0-1, higher = more diverse)</td>
+        </tr>
+        
+        <tr>
+            <td><code>weekday_ratio</code></td>
+            <td>工作日/周末使用强度比</td>
+            <td>Weekday vs weekend usage ratio</td>
+        </tr>
+        
+        <tr>
+            <td><code>avg_wait_time</code></td>
+            <td>平均响应等待时间（秒）</td>
+            <td>Average response wait time (seconds)</td>
+        </tr>
+        
+        <tr>
+            <td><code>has_shared</code></td>
+            <td>是否有分享/导出行为</td>
+            <td>Has shared or exported content</td>
+        </tr>
+        
+        <tr>
+            <td><code>viewed_pricing</code></td>
+            <td>是否查看过定价页面</td>
+            <td>Viewed pricing page</td>
+        </tr>
+        </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📊 模型性能</h2>
+        <div class="stat-grid">
+            <div class="stat-card"><div class="label">AUC</div><div class="value">0.726</div></div>
+            <div class="stat-card"><div class="label">准确率</div><div class="value">0.661</div></div>
+            <div class="stat-card"><div class="label">精确率</div><div class="value">0.681</div></div>
+            <div class="stat-card"><div class="label">召回率</div><div class="value">0.661</div></div>
+            <div class="stat-card"><div class="label">F1 分数</div><div class="value">0.668</div></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📈 特征重要性排名</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>特征</th><th>中文说明</th><th>English</th><th>重要性</th><th>贡献</th></tr></thead>
+                <tbody>
+        <tr>
+            <td><strong>first_hva_days</strong></td>
+            <td style="font-size:0.85rem;color:#555;">首次高价值行为出现天数</td>
+            <td style="font-size:0.8rem;color:#888;">Days to first High-Value Action</td>
+            <td>13.1%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:100.0%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>has_hva_14d</strong></td>
+            <td style="font-size:0.85rem;color:#555;">是否完成高价值行为</td>
+            <td style="font-size:0.8rem;color:#888;">Completed High-Value Action</td>
+            <td>9.0%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:68.74736019622986%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>active_days_14d</strong></td>
+            <td style="font-size:0.85rem;color:#555;">前14天活跃天数</td>
+            <td style="font-size:0.8rem;color:#888;">Active days in first 14 days</td>
+            <td>8.7%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:66.50192825490171%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>adoption_rate_14d</strong></td>
+            <td style="font-size:0.85rem;color:#555;">采纳率（AI输出直接使用比例）</td>
+            <td style="font-size:0.8rem;color:#888;">Adoption rate (direct AI output usage)</td>
+            <td>8.3%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:63.43786520740875%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>weekday_ratio</strong></td>
+            <td style="font-size:0.85rem;color:#555;">工作日/周末使用强度比</td>
+            <td style="font-size:0.8rem;color:#888;">Weekday vs weekend usage ratio</td>
+            <td>8.0%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:60.90706125473323%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>scenario_diversity</strong></td>
+            <td style="font-size:0.85rem;color:#555;">场景多样性指数（0-1，越高越多样）</td>
+            <td style="font-size:0.8rem;color:#888;">Scenario diversity index (0-1, higher = more diverse)</td>
+            <td>7.9%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:60.68173147874696%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>interval_std</strong></td>
+            <td style="font-size:0.85rem;color:#555;">使用间隔标准差（使用规律性）</td>
+            <td style="font-size:0.8rem;color:#888;">Standard deviation of usage intervals (regularity)</td>
+            <td>7.8%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:60.0964102665539%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>avg_depth_14d</strong></td>
+            <td style="font-size:0.85rem;color:#555;">平均会话深度（轮次）</td>
+            <td style="font-size:0.8rem;color:#888;">Average session depth (turns)</td>
+            <td>7.6%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:58.28099965329999%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>avg_wait_time</strong></td>
+            <td style="font-size:0.85rem;color:#555;">平均响应等待时间（秒）</td>
+            <td style="font-size:0.8rem;color:#888;">Average response wait time (seconds)</td>
+            <td>7.3%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:55.69102462064217%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>sessions_14d</strong></td>
+            <td style="font-size:0.85rem;color:#555;">前14天会话总数</td>
+            <td style="font-size:0.8rem;color:#888;">Total sessions in first 14 days</td>
+            <td>6.1%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:46.82806742029926%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>activity_trend</strong></td>
+            <td style="font-size:0.85rem;color:#555;">活跃度变化趋势（后7天-前7天）</td>
+            <td style="font-size:0.8rem;color:#888;">Activity trend (day 8-14 minus day 1-7)</td>
+            <td>4.9%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:37.257490731158185%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>day7_return</strong></td>
+            <td style="font-size:0.85rem;color:#555;">第7天是否回访</td>
+            <td style="font-size:0.8rem;color:#888;">Returned on day 7</td>
+            <td>3.1%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:23.842661349174826%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>num_scenarios</strong></td>
+            <td style="font-size:0.85rem;color:#555;">使用场景数量</td>
+            <td style="font-size:0.8rem;color:#888;">Number of usage scenarios</td>
+            <td>2.5%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:19.402187277879708%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>feature_count_14d</strong></td>
+            <td style="font-size:0.85rem;color:#555;">使用的高级功能数量</td>
+            <td style="font-size:0.8rem;color:#888;">Number of advanced features used</td>
+            <td>1.6%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:12.21569349148889%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>day14_return</strong></td>
+            <td style="font-size:0.85rem;color:#555;">第14天是否回访</td>
+            <td style="font-size:0.8rem;color:#888;">Returned on day 14</td>
+            <td>1.3%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:9.75197957865256%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>has_shared</strong></td>
+            <td style="font-size:0.85rem;color:#555;">是否有分享/导出行为</td>
+            <td style="font-size:0.8rem;color:#888;">Has shared or exported content</td>
+            <td>1.2%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:9.05119167714636%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>day1_return</strong></td>
+            <td style="font-size:0.85rem;color:#555;">第2天是否回访</td>
+            <td style="font-size:0.8rem;color:#888;">Returned on day 2</td>
+            <td>1.0%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:7.4505125501401075%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>viewed_pricing</strong></td>
+            <td style="font-size:0.85rem;color:#555;">是否查看过定价页面</td>
+            <td style="font-size:0.8rem;color:#888;">Viewed pricing page</td>
+            <td>0.7%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:5.562074870088604%;background:#e74c3c;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        </tbody>
+            </table>
+        </div>
+        <div class="insight-box">
+            💡 <strong>关键洞察</strong>：<br>
+            • <strong>first_hva_days</strong> (首次高价值行为出现天数) 是最强的流失预测因子<br>
+            • 前 3 大特征贡献了 31% 的预测能力
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📊 特征组重要性</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>特征组</th><th>重要性</th><th>贡献</th></tr></thead>
+                <tbody>
+        <tr>
+            <td><strong>基础活跃特征</strong></td>
+            <td>22.4%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:22.412119216335707%;background:#667eea;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>价值特征</strong></td>
+            <td>30.3%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:30.323015970258705%;background:#667eea;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>留存信号</strong></td>
+            <td>5.4%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:5.360430846753712%;background:#667eea;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>使用广度</strong></td>
+            <td>12.1%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:12.054180499137104%;background:#667eea;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>使用模式</strong></td>
+            <td>20.7%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:20.668626427485872%;background:#667eea;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        
+        <tr>
+            <td><strong>参与质量</strong></td>
+            <td>9.2%</td>
+            <td>
+                <div style="width:100%;background:#e8eaed;border-radius:4px;height:16px;">
+                    <div style="width:9.181627040028912%;background:#667eea;border-radius:4px;height:16px;"></div>
+                </div>
+            </td>
+        </tr>
+        </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📋 混淆矩阵</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>实际 \ 预测</th><th>留存</th><th>流失</th><th>合计</th></tr></thead>
+                <tbody>
+        <tr>
+            <td><strong>留存</strong></td>
+            <td>310</td>
+            <td>199</td>
+            <td>509</td>
+        </tr>
+        
+        <tr>
+            <td><strong>流失</strong></td>
+            <td>309</td>
+            <td>682</td>
+            <td>991</td>
+        </tr>
+        </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>📊 风险分布</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>风险等级</th><th>用户数</th><th>占比</th><th>定义与建议</th></tr></thead>
+                <tbody>
+        <tr>
+            <td><span style="color:#2ecc71;font-weight:bold;">●</span> 低风险</td>
+            <td>768</td>
+            <td>15.4%</td>
+            <td style="font-size:0.85rem;color:#555;">流失概率 0-30% → 持续监控，正常运营</td>
+        </tr>
+        
+        <tr>
+            <td><span style="color:#f39c12;font-weight:bold;">●</span> 中风险</td>
+            <td>1,908</td>
+            <td>38.2%</td>
+            <td style="font-size:0.85rem;color:#555;">流失概率 30-60% → 积极触达，推送使用提醒</td>
+        </tr>
+        
+        <tr>
+            <td><span style="color:#e74c3c;font-weight:bold;">●</span> 高风险</td>
+            <td>2,324</td>
+            <td>46.5%</td>
+            <td style="font-size:0.85rem;color:#555;">流失概率 60-100% → 立即干预，人工跟进</td>
+        </tr>
+        </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Generated by Skill 8.1: 流失预警模型</p>
+    </div>
+</div>
+</body>
+</html>
